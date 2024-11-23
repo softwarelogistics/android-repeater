@@ -47,7 +47,6 @@ class MqttBackgroundService() : Service() {
 
     var hostIntent : Intent? = null
 
-
     @SuppressLint("MissingPermission")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         hostIntent = intent
@@ -56,9 +55,9 @@ class MqttBackgroundService() : Service() {
         Log.d("onStartCommand", "Start Command Called!")
         sendNotification("Welcome to the 911 Repeater App")
 
-        deviceId = "repeater0001"
+        deviceId = "repeater0002"
 
-        timer = fixedRateTimer(name="foo", startAt = Date(), period=1000) {
+        timer = fixedRateTimer(name="foo", startAt = Date(), period=15000) {
 
             sendMQTTHeartBeat()
         }
@@ -77,6 +76,9 @@ class MqttBackgroundService() : Service() {
 
     @SuppressLint("MissingPermission")
     private fun sendMQTTHeartBeat() {
+        if(!this::client.isInitialized)
+            return
+
         //if (ActivityCompat.checkSelfPermission( this, Manifest.permission.ACCESS_FINE_LOCATION ) == PackageManager.PERMISSION_GRANTED) {
         val telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
 
@@ -95,7 +97,12 @@ class MqttBackgroundService() : Service() {
 
         Log.d("sendMQTTHeartBeat", topic + " - " + payload)
 
-        if(this::client.isInitialized && client.state == MqttClientState.CONNECTED){
+        if(client.state != MqttClientState.CONNECTED) {
+            Log.e("MqttBackgroundService", "MQTT Not Connected - Reconnecting")
+            connectToMQTT()
+        }
+
+        if(client.state == MqttClientState.CONNECTED){
             client.publishWith()
                 .topic(topic)
                 .payload(payload.toByteArray())
@@ -109,6 +116,8 @@ class MqttBackgroundService() : Service() {
                     }
                 }
         }
+        else
+            Log.e("MqttBackgroundService", "MQTT Not Connected - did not send")
     }
 
     private fun bindData(cellInfo: CellInfo): BaseStation? {
@@ -259,6 +268,23 @@ class MqttBackgroundService() : Service() {
                 if (throwable != null) {
                     Log.d("connectToMQTT", "Could not connect")
                 } else {
+                    val topic = "nuviot/srvr/dvcsrvc/$deviceId/online"
+                    val payload = "firmwareSku=SA-RPTR-ANDRD-001,firmwareVersion=1.0.0"
+
+                    Log.d("MqttBackgroundService", "Initial: " + topic + " - " + payload)
+
+                    client.publishWith()
+                        .topic(topic)
+                        .payload(payload.toByteArray())
+                        .send()
+                        .whenComplete { publish: Mqtt3Publish?, throwable: Throwable? ->
+                            if (throwable != null) {
+                                Log.d("could not publish", "success")
+                                // handle failure to publish
+                            } else {
+                                Log.d("MqttBackgroundService", "Publish Success")
+                            }
+                        }
                     subscribe()
                     Log.d("connectToMQTT", "Connected")
                 }
