@@ -1,5 +1,5 @@
 [versions]
-agp = "8.4.1"
+agp = "8.7.2"
 kotlin = "1.9.0"
 coreKtx = "1.13.1"
 junit = "4.13.2"
@@ -12,8 +12,10 @@ lifecycleLivedataKtx = "2.8.5"
 lifecycleViewmodelKtx = "2.8.5"
 navigationFragmentKtx = "2.8.0"
 navigationUiKtx = "2.8.0"
+hiveMq = "1.3.3"
 
 [libraries]
+hiveMq = {group="com.hivemq", name="hivemq-mqtt-client", version.ref="hiveMq"}
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
