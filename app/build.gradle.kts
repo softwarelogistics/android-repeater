@@ -55,6 +55,8 @@ dependencies {
     implementation(libs.hiveMq)
     implementation(libs.play.services.location)
     implementation(libs.androidx.databinding.runtime)
+    implementation(libs.androidx.datastore.core.android)
+    implementation(libs.androidx.datastore.preferences)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

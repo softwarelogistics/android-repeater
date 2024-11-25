@@ -8,7 +8,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.database.Observable
 import android.location.Location
 import android.media.RingtoneManager
 import android.os.Binder
@@ -21,7 +20,8 @@ import android.telephony.CellInfoWcdma
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.databinding.ObservableField
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.preferencesDataStore
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.hivemq.client.mqtt.MqttClient
@@ -31,11 +31,11 @@ import com.hivemq.client.mqtt.mqtt3.message.connect.connack.Mqtt3ConnAck
 import com.hivemq.client.mqtt.mqtt3.message.publish.Mqtt3Publish
 import com.hivemq.client.mqtt.mqtt3.message.subscribe.suback.Mqtt3SubAck
 import com.softwarelogistics.safetyalertclient.com.softwarelogistics.safetyalertclient.BaseStation
-import io.reactivex.ObservableEmitter
 import java.nio.charset.StandardCharsets
 import java.util.Date
 import java.util.Timer
 import kotlin.concurrent.fixedRateTimer
+import kotlin.coroutines.jvm.internal.CompletedContinuation.context
 
 
 class MqttBackgroundService() : Service() {
@@ -47,16 +47,18 @@ class MqttBackgroundService() : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     lateinit var deviceId: String
     var lastLocation: Location? = null
-
-    val REQUEST_SMS_PHONE_STATE = 1
-    val REQUEST_LOCATION_SERVICES_STATE = 2
-
     var hostIntent : Intent? = null
+
+    val dataStore by preferencesDataStore(name="hi")
 
     @SuppressLint("MissingPermission")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         hostIntent = intent
 
+
+        dataStore.data.map { pref -> {
+
+        } } ["test"]
 
         Log.d("onStartCommand", "Start Command Called!")
         sendNotification("Welcome to the 911 Repeater App")
