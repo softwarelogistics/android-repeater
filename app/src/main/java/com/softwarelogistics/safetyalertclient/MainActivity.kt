@@ -1,21 +1,54 @@
 package com.softwarelogistics.safetyalertclient
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.IBinder
 import android.util.Log
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+
 
 class MainActivity : AppCompatActivity() {
     // on below line we are creating variable
     // for edit text phone and message and button
 
+    lateinit var reciever: BroadcastReceiver
+
+    lateinit var connectLabel: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        val filter = IntentFilter()
+        filter.addAction("com.softwarelogistics.911repeater")
+
+        reciever = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if(intent.hasExtra("connected")){
+                    val isConnected = intent.extras!!.getBoolean("connected")
+                    if(isConnected)
+                        connectLabel.setText("Connected: true")
+                    else
+                        connectLabel.setText("Connected: false")
+                }
+
+                Log.d("onCreate", "MQTT Connected")      //UI update here
+            }
+        }
+
+        connectLabel = findViewById<TextView>(R.id.lblConnectionStatus)
+
+        registerReceiver(reciever, filter, RECEIVER_NOT_EXPORTED)
 
         if(checkPermissions()) {
             startBackgroundService()
@@ -24,7 +57,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun startBackgroundService() {
         Log.d("MainActivity", "On Created - Before Background Service")
-        val intent = Intent(this, MqttBackgroundService::class.java)
+        val intent = Intent(this, MqttBackgroundService::class.java).also {intent ->
+            bindService(intent, connection, Context.BIND_AUTO_CREATE )
+        }
+
         startForegroundService(intent)
         Log.d("MainActivity", "On Created - Completed")
     }
@@ -79,4 +115,22 @@ class MainActivity : AppCompatActivity() {
 
         return true
     }
+
+    private lateinit var mService: MqttBackgroundService
+    private var mBound: Boolean = false
+
+    private val connection = object : ServiceConnection {
+
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            // We've bound to LocalService, cast the IBinder and get LocalService instance.
+            val binder = service as MqttBackgroundService.LocalBinder
+            mService = binder.getService()
+            mBound = true
+        }
+
+        override fun onServiceDisconnected(arg0: ComponentName) {
+            mBound = false
+        }
+    }
+
 }
