@@ -1,6 +1,7 @@
 package com.softwarelogistics.safetyalertclient
 
 import android.Manifest
+import android.R.id.message
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -10,11 +11,24 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
+import android.telephony.SmsManager
 import android.util.Log
+import android.view.Menu
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ListView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import com.softwarelogistics.safetyalertclient.com.softwarelogistics.safetyalertclient.LogListAdapter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 
 class MainActivity : AppCompatActivity() {
@@ -23,11 +37,30 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var reciever: BroadcastReceiver
 
+    lateinit var editMqttDeviceId: EditText
+    lateinit var editPhoneNumber: EditText
+    lateinit var btnSaveDeviceId: Button
     lateinit var connectLabel: TextView
+    lateinit var logList: ListView
+    lateinit var lstAdapter: LogListAdapter
+    var deviceId: String = ""
+    var phoneNumber: String = ""
+
+    private val Context.dataStore by preferencesDataStore(name = "settingsStorage")
+    val DEVICE_ID = stringPreferencesKey("deviceid")
+    var PHONE_NUMBER_ID = stringPreferencesKey("phonenumber")
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.bottom_nav_menu, menu)
+
+        return super.onCreateOptionsMenu(menu)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        lstAdapter = LogListAdapter(baseContext, android.R.layout.simple_list_item_1)
 
         val filter = IntentFilter()
         filter.addAction("com.softwarelogistics.911repeater")
@@ -41,18 +74,49 @@ class MainActivity : AppCompatActivity() {
                     else
                         connectLabel.setText("Connected: false")
                 }
+                if(intent.hasExtra("log")) {
+                    lstAdapter.addLogRecord(intent.extras!!.getString("log")!!)
+                    lstAdapter.notifyDataSetChanged()
+                    Log.d("Notification Received", intent.extras!!.getString("log")!!)
+                }
 
-                Log.d("onCreate", "MQTT Connected")      //UI update here
+                if(intent.hasExtra("sms")) {
+                    if(phoneNumber.length > 0) {
+                        val body = intent.extras!!.getString("sms")
+                        val smsManager: SmsManager = SmsManager.getDefault()
+                        smsManager.sendTextMessage(phoneNumber, null, body, null, null)
+                        lstAdapter.addLogRecord("Sending Text to $phoneNumber.")
+                        lstAdapter.notifyDataSetChanged()
+                    }
+                    else {
+                        lstAdapter.addLogRecord("Phone number not configured, will not send text.")
+                        lstAdapter.notifyDataSetChanged()
+                    }
+                }
             }
         }
 
+        editMqttDeviceId = findViewById<EditText>(R.id.editMqttDeviceId)
+        editPhoneNumber = findViewById<EditText>(R.id.editPhoneNumber)
+        btnSaveDeviceId = findViewById<Button>(R.id.btnSaveDeviceId)
         connectLabel = findViewById<TextView>(R.id.lblConnectionStatus)
+        logList = findViewById<ListView>(R.id.lstLog)
+        logList.adapter = lstAdapter
 
+        btnSaveDeviceId.setOnClickListener { CoroutineScope(Dispatchers.IO).launch{ saveDeviceId()} }
         registerReceiver(reciever, filter, RECEIVER_NOT_EXPORTED)
 
         if(checkPermissions()) {
             startBackgroundService()
         }
+    }
+
+    private suspend fun saveDeviceId() {
+        val deviceId = editMqttDeviceId.text.toString()
+        phoneNumber = editPhoneNumber.text.toString()
+        dataStore.edit { preferences  -> preferences[DEVICE_ID] = deviceId; preferences[PHONE_NUMBER_ID] = phoneNumber}
+        dataStore.apply {  }
+        connection.getService().setMqttDeviceId(deviceId)
     }
 
     private fun startBackgroundService() {
@@ -62,10 +126,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         startForegroundService(intent)
-        Log.d("MainActivity", "On Created - Completed")
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        Log.d("CheckPermissions", "Request Code $requestCode")
         if(checkPermissions()) {
             startBackgroundService()
         }
@@ -116,16 +180,35 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    private lateinit var mService: MqttBackgroundService
+    public lateinit var mService: MqttBackgroundService
     private var mBound: Boolean = false
 
     private val connection = object : ServiceConnection {
+
+        fun getService() : MqttBackgroundService {
+            return mService
+        }
 
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             // We've bound to LocalService, cast the IBinder and get LocalService instance.
             val binder = service as MqttBackgroundService.LocalBinder
             mService = binder.getService()
             mBound = true
+
+            CoroutineScope(Dispatchers.IO).launch {
+                val storedDeviceId = dataStore.data.first()[DEVICE_ID]
+                val storedPhoneNumber = dataStore.data.first()[PHONE_NUMBER_ID]
+                if(storedDeviceId != null) {
+                    deviceId = storedDeviceId
+                    mService.setMqttDeviceId(deviceId)
+                }
+
+                if(storedPhoneNumber != null)
+                    phoneNumber = storedPhoneNumber
+
+                editPhoneNumber.setText(phoneNumber)
+                editMqttDeviceId.setText(deviceId)
+            }
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {

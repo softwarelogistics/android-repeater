@@ -26,13 +26,44 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:layout_marginStart="10dp"
-        android:layout_marginTop="30dp"
         android:layout_marginEnd="10dp"
         android:padding="10dp"
         android:text="Connected: False"
         android:textAlignment="center"
         android:textColor="@color/black"
         android:textSize="20sp" />
+
+    <EditText
+        android:id="@+id/editMqttDeviceId"
+        android:layout_width="match_parent"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:hint = "-please add your device id-"
+        android:layout_height="40dp">
+    </EditText>
+    <EditText
+        android:id="@+id/editPhoneNumber"
+        android:layout_width="match_parent"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:hint = "-please add destination phone number-"
+        android:layout_height="40dp">
+    </EditText>
+    <Button
+        android:id="@+id/btnSaveDeviceId"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:text="Save">
+    </Button>
+
+
+
+    <ListView
+        android:id="@+id/lstLog"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        />
 
     <!--on below line we are creating a
         simple edit text for phone number-->
