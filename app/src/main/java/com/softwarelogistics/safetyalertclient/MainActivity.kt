@@ -1,7 +1,8 @@
 package com.softwarelogistics.safetyalertclient
 
 import android.Manifest
-import android.R.id.message
+import android.app.PendingIntent
+import android.app.PendingIntent.FLAG_IMMUTABLE
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -60,13 +61,15 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        lstAdapter = LogListAdapter(baseContext, android.R.layout.simple_list_item_1)
+        lstAdapter = LogListAdapter(this, android.R.layout.simple_list_item_1)
 
         val filter = IntentFilter()
         filter.addAction("com.softwarelogistics.911repeater")
 
         reciever = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
+                val index =  if(intent.hasExtra("index")) intent.extras!!.getString(("index")) else  "??"
+
                 if(intent.hasExtra("connected")){
                     val isConnected = intent.extras!!.getBoolean("connected")
                     if(isConnected)
@@ -83,9 +86,12 @@ class MainActivity : AppCompatActivity() {
                 if(intent.hasExtra("sms")) {
                     if(phoneNumber.length > 0) {
                         val body = intent.extras!!.getString("sms")
-                        val smsManager: SmsManager = SmsManager.getDefault()
-                        smsManager.sendTextMessage(phoneNumber, null, body, null, null)
-                        lstAdapter.addLogRecord("Sending Text to $phoneNumber.")
+                        val smsManager: SmsManager =   SmsManager.getDefault()
+                        val piSent = PendingIntent.getBroadcast(context, 0, Intent("SMS_SENT"), FLAG_IMMUTABLE)
+                        val piDelivered = PendingIntent.getBroadcast(context, 0, Intent("SMS_DELIVERED"), FLAG_IMMUTABLE)
+                        smsManager.sendTextMessage(phoneNumber, null, body, piSent, piDelivered)
+                        lstAdapter.addLogRecord("Sending Text to $phoneNumber - $index")
+                        mService.sendMQTTTopic("repeater/$deviceId/send/$phoneNumber")
                         lstAdapter.notifyDataSetChanged()
                     }
                     else {
@@ -96,6 +102,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+
+
         editMqttDeviceId = findViewById<EditText>(R.id.editMqttDeviceId)
         editPhoneNumber = findViewById<EditText>(R.id.editPhoneNumber)
         btnSaveDeviceId = findViewById<Button>(R.id.btnSaveDeviceId)
@@ -105,11 +113,38 @@ class MainActivity : AppCompatActivity() {
 
         btnSaveDeviceId.setOnClickListener { CoroutineScope(Dispatchers.IO).launch{ saveDeviceId()} }
         registerReceiver(reciever, filter, RECEIVER_NOT_EXPORTED)
+        Log.d("MAINACTIVITY_onCreate", "Register Receiver")
+
+        smsSentReceiver = object : BroadcastReceiver() {
+            override fun onReceive(arg0: Context, arg1: Intent) {
+                when (resultCode) {
+                    RESULT_OK -> lstAdapter.addLogRecord("SMS Send to $phoneNumber - Success")
+                    SmsManager.RESULT_ERROR_GENERIC_FAILURE -> lstAdapter.addLogRecord("SMS Send to $phoneNumber - Generic Failure")
+                    SmsManager.RESULT_ERROR_NO_SERVICE -> lstAdapter.addLogRecord("SMS Send to $phoneNumber - No Service")
+                    SmsManager.RESULT_ERROR_NULL_PDU -> lstAdapter.addLogRecord("SMS Send to $phoneNumber - No PDU")
+                    SmsManager.RESULT_ERROR_RADIO_OFF -> lstAdapter.addLogRecord("SMS Send to $phoneNumber - Radio Off")
+
+                    else -> {}
+                }
+            }
+        }
+        smsDeliveredReceiver = object : BroadcastReceiver() {
+            override fun onReceive(arg0: Context, arg1: Intent) {
+                // TODO Auto-generated method stub
+                when (resultCode) {
+                    RESULT_OK -> lstAdapter.addLogRecord("SMS Delivered $phoneNumber")
+                    RESULT_CANCELED -> lstAdapter.addLogRecord("SMS Not Delivered $phoneNumber")
+                }
+            }
+        }
 
         if(checkPermissions()) {
             startBackgroundService()
         }
     }
+
+    var smsSentReceiver: BroadcastReceiver? = null
+    var smsDeliveredReceiver: BroadcastReceiver? = null
 
     private suspend fun saveDeviceId() {
         val deviceId = editMqttDeviceId.text.toString()
@@ -117,6 +152,7 @@ class MainActivity : AppCompatActivity() {
         dataStore.edit { preferences  -> preferences[DEVICE_ID] = deviceId; preferences[PHONE_NUMBER_ID] = phoneNumber}
         dataStore.apply {  }
         connection.getService().setMqttDeviceId(deviceId)
+        mService.setOutgoingPhoneNumber(phoneNumber)
     }
 
     private fun startBackgroundService() {
@@ -201,6 +237,7 @@ class MainActivity : AppCompatActivity() {
                 if(storedDeviceId != null) {
                     deviceId = storedDeviceId
                     mService.setMqttDeviceId(deviceId)
+                    mService.setOutgoingPhoneNumber(phoneNumber)
                 }
 
                 if(storedPhoneNumber != null)

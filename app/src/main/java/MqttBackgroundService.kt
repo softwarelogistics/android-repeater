@@ -55,8 +55,9 @@ class MqttBackgroundService() : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     var deviceId: String = ""
     var lastLocation: Location? = null
-    var hostIntent : Intent? = null
+    var sendingPhoneNumber: String = ""
 
+    var index = 1
 
     @SuppressLint("MissingPermission")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -94,6 +95,18 @@ class MqttBackgroundService() : Service() {
         }
     }
 
+    fun setOutgoingPhoneNumber(ph: String) {
+        sendingPhoneNumber = ph
+    }
+
+    fun sendMQTTTopic(topic: String) {
+        if(client.state == MqttClientState.CONNECTED){
+            client.publishWith()
+                .topic(topic)
+                .send()
+        }
+    }
+
     inner class LocalBinder : Binder() {
         // Return this instance of LocalService so clients can call public methods.
         fun getService(): MqttBackgroundService = this@MqttBackgroundService
@@ -110,8 +123,9 @@ class MqttBackgroundService() : Service() {
         val currentPhone = telephonyManager.line1Number
         val cellLocationList = telephonyManager.allCellInfo
         val networkOperator = telephonyManager.networkOperator
-        val mcc = networkOperator.substring(0, 3)
-        val mnc = networkOperator.substring(3)
+
+        val mcc = if(networkOperator.length > 6)  networkOperator.substring(3, 0) else ""
+        val mnc = if( networkOperator.length > 6)  networkOperator.substring(3) else ""
 
         val bm = baseContext.getSystemService(BATTERY_SERVICE) as BatteryManager
         val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -123,11 +137,15 @@ class MqttBackgroundService() : Service() {
         if(lastLocation != null)
             payload += "lat=${lastLocation!!.latitude},lon=${lastLocation!!.longitude},"
 
+        if(sendingPhoneNumber != null && sendingPhoneNumber.length > 0)
+            payload += "phone=${sendingPhoneNumber},"
+
         if(client.state != MqttClientState.CONNECTED) {
             Log.e("MqttBackgroundService", "MQTT Not Connected - Reconnecting")
             connectToMQTT()
 
             val intent = Intent()
+            intent.setPackage(baseContext.packageName)
             intent.setAction("com.softwarelogistics.911repeater")
             intent.putExtra("connected", false)
             intent.putExtra("log", "disconnected")
@@ -146,6 +164,7 @@ class MqttBackgroundService() : Service() {
                     } else {
 
                         val msgIntent = Intent()
+                        msgIntent.setPackage(baseContext.packageName)
                         msgIntent.setAction("com.softwarelogistics.911repeater")
                         msgIntent.putExtra("log", "Sent Heartbeat")
                         sendBroadcast(msgIntent)
@@ -241,7 +260,7 @@ class MqttBackgroundService() : Service() {
         val notificationBuilder: NotificationCompat.Builder =
             NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(R.drawable.ic_notification_overlay) //drawable.splash)
-                .setContentTitle("Service test")
+                .setContentTitle("Software Logistics 911 Repeater")
                 .setContentText(messageBody)
                 .setAutoCancel(true)
                 .setSound(defaultSoundUri)
@@ -277,10 +296,14 @@ class MqttBackgroundService() : Service() {
                 println("Received notification $notification for sms")
 
                 val intent = Intent()
+                intent.setPackage(baseContext.packageName)
                 intent.setAction("com.softwarelogistics.911repeater")
                 intent.putExtra("topic",notification)
                 intent.putExtra("sms", sms)
+                intent.putExtra("index", index.toString())
                 sendBroadcast(intent)
+
+                index++
             }
             .send()
             .whenComplete { publish: Mqtt3SubAck?, throwable: Throwable? ->
@@ -304,6 +327,7 @@ class MqttBackgroundService() : Service() {
             .buildAsync()
 
         client.connectWith()
+
             .simpleAuth()
             .username("alerting")
             .password("4MyAlerts!".toByteArray())
@@ -312,6 +336,7 @@ class MqttBackgroundService() : Service() {
             .whenComplete { publish: Mqtt3ConnAck?, throwable: Throwable? ->
                 if (throwable != null) {
                     val intent = Intent()
+                    intent.setPackage(baseContext.packageName)
                     intent.setAction("com.softwarelogistics.911repeater")
                     intent.putExtra("connected", false)
                     intent.putExtra("log", "could not connect")
@@ -320,6 +345,7 @@ class MqttBackgroundService() : Service() {
                     Log.d("connectToMQTT", "Could not connect")
                 } else {
                     val intent = Intent()
+                    intent.setPackage(baseContext.packageName)
                     intent.setAction("com.softwarelogistics.911repeater")
                     intent.putExtra("connected", true)
                     intent.putExtra("log", "Connected to $hostName")
