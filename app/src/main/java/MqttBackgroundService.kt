@@ -71,15 +71,12 @@ class MqttBackgroundService() : Service() {
         }
 
         CoroutineScope(Dispatchers.IO).launch {
-
-
-            timer = fixedRateTimer(name = "heartBeatTimer", startAt = Date(), period = 15000) {
+        timer = fixedRateTimer(name = "heartBeatTimer", startAt = Date(), period = 15000) {
                 sendMQTTHeartBeat()
             }
         }
 
         sendNotification("NuvIoT - Safety Alerting - 911 Repeater Started")
-
         return super.onStartCommand(intent, flags, startId)
     }
 
@@ -175,64 +172,6 @@ class MqttBackgroundService() : Service() {
         }
         else
             Log.e("MqttBackgroundService", "MQTT Not Connected - did not send")
-    }
-
-    private fun bindData(cellInfo: CellInfo): BaseStation? {
-        var baseStation: BaseStation? = null
-        //基站有不同信号类型：2G，3G，4G
-        if (cellInfo is CellInfoWcdma) {
-            //联通3G
-            val cellInfoWcdma = cellInfo
-            val cellIdentityWcdma = cellInfoWcdma.cellIdentity
-            baseStation = BaseStation()
-            baseStation.type = "WCDMA"
-            baseStation.cid = cellIdentityWcdma.cid
-            baseStation.lac = cellIdentityWcdma.lac
-            baseStation.mcc = cellIdentityWcdma.mcc
-            baseStation.mnc = cellIdentityWcdma.mnc
-            baseStation.bsic_psc_pci = cellIdentityWcdma.psc
-            if (cellInfoWcdma.cellSignalStrength != null) {
-                baseStation.asuLevel = (cellInfoWcdma.cellSignalStrength.asuLevel) //Get the signal level as an asu value between 0..31, 99 is unknown Asu is calculated based on 3GPP RSRP.
-                baseStation.signalLevel = (cellInfoWcdma.cellSignalStrength.level) //Get signal level as an int from 0..4
-                baseStation.dbm = (cellInfoWcdma.cellSignalStrength.dbm) //Get the signal strength as dBm
-            }
-        } else if (cellInfo is CellInfoLte) {
-            //4G
-            val cellInfoLte = cellInfo
-            val cellIdentityLte = cellInfoLte.cellIdentity
-            baseStation = BaseStation()
-            baseStation.type = ("LTE")
-            baseStation.cid = (cellIdentityLte.ci)
-            baseStation.mnc = (cellIdentityLte.mnc)
-            baseStation.mcc = (cellIdentityLte.mcc)
-            baseStation.lac = (cellIdentityLte.tac)
-            baseStation.bsic_psc_pci = (cellIdentityLte.pci)
-            if (cellInfoLte.cellSignalStrength != null) {
-                baseStation.asuLevel = cellInfoLte.cellSignalStrength.asuLevel
-                baseStation.signalLevel = cellInfoLte.cellSignalStrength.level
-                baseStation.dbm = cellInfoLte.cellSignalStrength.dbm
-            }
-        } else if (cellInfo is CellInfoGsm) {
-            //2G
-            val cellInfoGsm = cellInfo
-            val cellIdentityGsm = cellInfoGsm.cellIdentity
-            baseStation = BaseStation()
-            baseStation.type = ("GSM")
-            baseStation.cid = (cellIdentityGsm.cid)
-            baseStation.lac = (cellIdentityGsm.lac)
-            baseStation.mcc = (cellIdentityGsm.mcc)
-            baseStation.mnc = (cellIdentityGsm.mnc)
-            baseStation.bsic_psc_pci = (cellIdentityGsm.psc)
-            if (cellInfoGsm.cellSignalStrength != null) {
-                baseStation.asuLevel = (cellInfoGsm.cellSignalStrength.asuLevel)
-                baseStation.signalLevel = (cellInfoGsm.cellSignalStrength.level)
-                baseStation.dbm = (cellInfoGsm.cellSignalStrength.dbm)
-            }
-        } else {
-            //电信2/3G
-            Log.e("MQTT", "CDMA CellInfo................................................")
-        }
-        return baseStation
     }
 
     override fun stopService(name: Intent?): Boolean {

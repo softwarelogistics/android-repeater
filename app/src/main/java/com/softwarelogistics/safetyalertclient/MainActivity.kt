@@ -77,6 +77,7 @@ class MainActivity : AppCompatActivity() {
                     else
                         connectLabel.setText("Connected: false")
                 }
+
                 if(intent.hasExtra("log")) {
                     lstAdapter.addLogRecord(intent.extras!!.getString("log")!!)
                     lstAdapter.notifyDataSetChanged()
