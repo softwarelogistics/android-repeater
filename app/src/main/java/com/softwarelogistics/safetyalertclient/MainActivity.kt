@@ -12,6 +12,7 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
+import android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
 import android.telephony.SmsManager
 import android.util.Log
 import android.view.Menu
@@ -63,6 +64,8 @@ class MainActivity : AppCompatActivity() {
 
         lstAdapter = LogListAdapter(this, android.R.layout.simple_list_item_1)
 
+        intent.setAction(ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+
         val filter = IntentFilter()
         filter.addAction("com.softwarelogistics.911repeater")
 
@@ -102,8 +105,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-
-
 
         editMqttDeviceId = findViewById<EditText>(R.id.editMqttDeviceId)
         editPhoneNumber = findViewById<EditText>(R.id.editPhoneNumber)

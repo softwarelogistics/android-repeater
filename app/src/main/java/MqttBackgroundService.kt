@@ -9,23 +9,17 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.location.Location
 import android.media.RingtoneManager
 import android.os.BatteryManager
 import android.os.Binder
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
-import android.telephony.CellInfo
-import android.telephony.CellInfoGsm
-import android.telephony.CellInfoLte
-import android.telephony.CellInfoWcdma
+import android.os.PowerManager
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.hivemq.client.mqtt.MqttClient
@@ -34,11 +28,8 @@ import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient
 import com.hivemq.client.mqtt.mqtt3.message.connect.connack.Mqtt3ConnAck
 import com.hivemq.client.mqtt.mqtt3.message.publish.Mqtt3Publish
 import com.hivemq.client.mqtt.mqtt3.message.subscribe.suback.Mqtt3SubAck
-import com.softwarelogistics.safetyalertclient.com.softwarelogistics.safetyalertclient.BaseStation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.nio.charset.StandardCharsets
 import java.util.Date
@@ -70,11 +61,38 @@ class MqttBackgroundService() : Service() {
             Log.d("Has Fine Location", "got location")
         }
 
+        /*
         CoroutineScope(Dispatchers.IO).launch {
         timer = fixedRateTimer(name = "heartBeatTimer", startAt = Date(), period = 15000) {
                 sendMQTTHeartBeat()
             }
-        }
+        }*/
+
+        val handler: Handler = Handler()
+        val delay = 1000 // 1000 milliseconds == 1 second
+
+        handler.postDelayed(object : Runnable {
+            override fun run() {
+                sendMQTTHeartBeat()
+                handler.postDelayed(this, 30000)
+            }
+        }, 30000)
+
+        /*
+        val ALARM_TYPE = AlarmManager.RTC_WAKEUP
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) context.getSystemService(ALARM_SERVICE)
+            .setExactAndAllowWhileIdle(ALARM_TYPE, calendar.getTimeInMillis(), pendingIntent)
+
+        setExact(ELAPSED_REALTIME, 30 * 1000, null, null, () -> {
+            sendMQTTHeartBeat();
+        });*/
+
+        val wakeLock: PowerManager.WakeLock =
+            (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+                newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag").apply {
+                    acquire()
+                }
+            }
 
         sendNotification("NuvIoT - Safety Alerting - 911 Repeater Started")
         return super.onStartCommand(intent, flags, startId)
@@ -291,7 +309,7 @@ class MqttBackgroundService() : Service() {
                     sendBroadcast(intent)
 
                     val topic = "nuviot/srvr/dvcsrvc/$deviceId/online"
-                    val payload = "firmwareSku=SA-RPTR-ANDRD-001,firmwareVersion=0.5.2"
+                    val payload = "firmwareSku=SA-RPTR-ANDRD-001,firmwareVersion=0.8.0"
 
                     Log.d("MqttBackgroundService", "Initial: " + topic + " - " + payload)
 
