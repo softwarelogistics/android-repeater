@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 
+private val Context.dataStore by preferencesDataStore(name = "settingsStorage")
+
 class MainActivity : AppCompatActivity() {
     // on below line we are creating variable
     // for edit text phone and message and button
@@ -48,7 +50,7 @@ class MainActivity : AppCompatActivity() {
     var deviceId: String = ""
     var phoneNumber: String = ""
 
-    private val Context.dataStore by preferencesDataStore(name = "settingsStorage")
+
     val DEVICE_ID = stringPreferencesKey("deviceid")
     var PHONE_NUMBER_ID = stringPreferencesKey("phonenumber")
 
@@ -167,7 +169,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        Log.d("CheckPermissions", "Request Code $requestCode")
+        Log.d("onRequestPermissionsResult", "Request Code $requestCode")
+
+        for (i in permissions.indices) {
+            val permission = permissions[i]
+            val grantResult = grantResults[i]
+
+            if(grantResult == PackageManager.PERMISSION_GRANTED)
+            {
+                Log.d("onRequestPermissionsResult", "$permission Granted");
+            }
+            else if(grantResult == PackageManager.PERMISSION_DENIED)
+            {
+                Log.d("onRequestPermissionsResult", "$permission Denied");
+            }
+        }
+
         if(checkPermissions()) {
             startBackgroundService()
         }
@@ -185,15 +202,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkPermission(permission: String, rational: String, idx : Int): Boolean{
         if (ActivityCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this, permission))
-                showRationaleDialog("Required Permissions",rational,permission, idx)
-            else
-                ActivityCompat.requestPermissions(this,arrayOf(permission),idx)
+            Log.d("Permission Not Granted", rational);
+
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this, permission)) {
+                Log.d("Show Request Permission Rational", rational);
+                showRationaleDialog("Required Permissions", rational, permission, idx)
+            }
+            else {
+                ActivityCompat.requestPermissions(this, arrayOf(permission), idx)
+                Log.d("Request Permission", rational);
+            }
 
             return false
         }
-        else
+        else {
+            Log.d("Permission Granted", rational);
             return true
+        }
     }
 
     fun checkPermissions(): Boolean {
@@ -214,6 +239,19 @@ class MainActivity : AppCompatActivity() {
 
         if(!checkPermission(Manifest.permission.READ_PHONE_NUMBERS, "Access to get the phone number of this phone", 6))
             return false
+
+        /*
+        if(!checkPermission(Manifest.permission.USE_EXACT_ALARM, "Use Exact Alarm to Schedule Alarms", 7)) {
+            Log.d("CheckPermissions", "Does not have schedule exact alarm.");
+            return false
+        }
+
+        if(!checkPermission(Manifest.permission.SCHEDULE_EXACT_ALARM, "Schedule alarms to send heart beats", 8)) {
+            Log.d("CheckPermissions", "Does not have schedule exact alarm.");
+            return false
+        }*/
+
+        Log.d("CheckPermissions", "Has all permissions.");
 
         return true
     }
