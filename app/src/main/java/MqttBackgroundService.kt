@@ -8,16 +8,17 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.location.Location
 import android.media.RingtoneManager
 import android.os.BatteryManager
 import android.os.Binder
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.PowerManager
+import android.os.SystemClock
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -29,102 +30,92 @@ import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient
 import com.hivemq.client.mqtt.mqtt3.message.connect.connack.Mqtt3ConnAck
 import com.hivemq.client.mqtt.mqtt3.message.publish.Mqtt3Publish
 import com.hivemq.client.mqtt.mqtt3.message.subscribe.suback.Mqtt3SubAck
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.nio.charset.StandardCharsets
 import java.util.Date
 import java.util.Timer
-import kotlin.concurrent.fixedRateTimer
 
+const val PING_SENDER = "mqtt-ping-alarm"
+
+class AlarmReceiver(private val mqttService: MqttBackgroundService) : BroadcastReceiver() {
+     override fun onReceive(context: Context, intent: Intent) {
+        Log.d("MqttBackgroundService",SystemClock.elapsedRealtime().toString() + " in AlarmReceiver onReceive()")
+        mqttService.sendMQTTHeartBeat()
+    }
+}
 
 class MqttBackgroundService() : Service() {
-    private lateinit var timer: Timer
     lateinit var client: Mqtt3AsyncClient
 
     private val binder = LocalBinder()
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    var deviceId: String = ""
-    var lastLocation: Location? = null
-    var sendingPhoneNumber: String = ""
+    private var deviceId: String = ""
+    private var lastLocation: Location? = null
+    private var sendingPhoneNumber: String = ""
 
-    var index = 1
+    private var createTime = Date()
+    private var startTime = Date()
 
-    @SuppressLint("MissingPermission")
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        //prefs = baseContext.getSharedPreferences("repeaterstorage", Context.MODE_PRIVATE)
-        //deviceId = prefs.getString("deviceid", "")!!
+    private var index = 1
 
+    private val alarmReceiver = AlarmReceiver(this)
+
+    private var hasStarted = false
+
+    private lateinit var pendingIntent: PendingIntent
+
+    private fun registerReceiver() {
+        val filter = IntentFilter()
+        filter.addAction(PING_SENDER)
+        this.registerReceiver(alarmReceiver, filter, RECEIVER_NOT_EXPORTED)
+    }
+
+    override fun onCreate() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
-            lastLocation = location
-            Log.d("Has Fine Location", "got location")
+            lastLocation = location;
+            Log.d("MqttBackgroundService", "Got location - $location")
         }
 
-        /*
-        CoroutineScope(Dispatchers.IO).launch {
-        timer = fixedRateTimer(name = "heartBeatTimer", startAt = Date(), period = 15000) {
-                sendMQTTHeartBeat()
-            }
-        }*/
+        registerReceiver()
 
-  /*      val handler: Handler = Handler(() -> {
+        val pingIntent = Intent()
+        pingIntent.setAction(PING_SENDER)
+        pingIntent.setPackage(baseContext.packageName)
 
-        });
-        val delay = 1000 // 1000 milliseconds == 1 second
+        pendingIntent = PendingIntent.getBroadcast(applicationContext, 1000, pingIntent, PendingIntent.FLAG_IMMUTABLE)
+        scheduleNext()
+        sendNotification("NuvIoT - Safety Alerting - 911 Repeater Started")
+        hasStarted = true
+        startTime = Date()
+        Log.d("MqttBackgroundService", "Background Process Started " + createTime + " " + startTime)
 
-        handler.postDelayed(object : Runnable {
-            override fun run() {
-                sendMQTTHeartBeat()
-                handler.postDelayed(this, 30000)
-            }
-        }, 30000)
-*/
-
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-
-            alarmManager?.setExact(AlarmManager.RTC_WAKEUP, Date().time + (15 * 1000),
-                "NA", object : AlarmManager.OnAlarmListener { override fun onAlarm() { sendMQTTHeartBeat() }
-                },
-                null
-            );
-
-            /*
-        val ALARM_TYPE = AlarmManager.RTC_WAKEUP
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) context.getSystemService(ALARM_SERVICE)
-            .setExactAndAllowWhileIdle(ALARM_TYPE, calendar.getTimeInMillis(), pendingIntent)
-
-        setExact(ELAPSED_REALTIME, 30 * 1000, null, null, () -> {
-            sendMQTTHeartBeat();
-        });*/
-
-            val wakeLock: PowerManager.WakeLock =
-                (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-                    newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag").apply {
-                        acquire()
-                    }
-                }
-
-            sendNotification("NuvIoT - Safety Alerting - 911 Repeater Started")
-
-        Log.d("onStartCommand", "Process Started")
-        return super.onStartCommand(intent, flags, startId)
+        return super.onCreate()
     }
 
+    private fun scheduleNext() {
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        /*val nextTrigger = Date().time + (15 * 1000)
+        val ac = AlarmManager.AlarmClockInfo(nextTrigger, null)
+        alarmManager?.setAlarmClock(ac, pendingIntent);*/
 
+        val delayInMilliseconds = 15 * 1000
 
-    private fun getPendingIntent(requestCode : Int) : PendingIntent {
-        val intent = Intent(this, MqttBackgroundService::class.java)
+        val nextAlarmInMilliseconds: Long = (System.currentTimeMillis() + delayInMilliseconds)
 
-        return PendingIntent.getBroadcast(
-            this,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        if(Build.VERSION.SDK_INT >= 23){
+            // In SDK 23 and above, dosing will prevent setExact, setExactAndAllowWhileIdle will force
+            // the device to run this task whilst dosing.
+            Log.d("MqttBackgroundService", "Alarm schedule using setExactAndAllowWhileIdle, next: " + delayInMilliseconds);
+            alarmManager?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextAlarmInMilliseconds, pendingIntent);
+        } else if (Build.VERSION.SDK_INT >= 19) {
+            Log.d("MqttBackgroundService", "Alarm schedule using setExact, delay: " + delayInMilliseconds);
+            alarmManager?.setExact(AlarmManager.RTC_WAKEUP, nextAlarmInMilliseconds, pendingIntent);
+        } else {
+            Log.d("MqttBackgroundService", "Alarm schedule using set, next: " + delayInMilliseconds);
+            alarmManager?.set(AlarmManager.RTC_WAKEUP, nextAlarmInMilliseconds, pendingIntent);
+        }
     }
-
 
     fun setMqttDeviceId(id: String) {
         val shouldRestart = deviceId != id
@@ -150,15 +141,26 @@ class MqttBackgroundService() : Service() {
         }
     }
 
+
+
     inner class LocalBinder : Binder() {
         // Return this instance of LocalService so clients can call public methods.
         fun getService(): MqttBackgroundService = this@MqttBackgroundService
     }
 
     @SuppressLint("MissingPermission")
-    private fun sendMQTTHeartBeat() {
+    fun sendMQTTHeartBeat() {
+        Log.d("MqttBackgroundService", "Hearbeat - Start:" + startTime + " Create: " + createTime)
+
         if(!this::client.isInitialized)
             return
+
+        /*val wakeLock: PowerManager.WakeLock =
+        (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag").apply {
+                acquire()
+            }
+        }*/
 
         //if (ActivityCompat.checkSelfPermission( this, Manifest.permission.ACCESS_FINE_LOCATION ) == PackageManager.PERMISSION_GRANTED) {
         val telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
@@ -196,6 +198,7 @@ class MqttBackgroundService() : Service() {
         }
 
         if(client.state == MqttClientState.CONNECTED){
+            Log.d("MqttBackgroundService", "Connected - send heartbeat - Start:" + startTime + " Create: " + createTime)
             client.publishWith()
                 .topic(topic)
                 .payload(payload.toByteArray())
@@ -209,28 +212,32 @@ class MqttBackgroundService() : Service() {
                         val msgIntent = Intent()
                         msgIntent.setPackage(baseContext.packageName)
                         msgIntent.setAction("com.softwarelogistics.911repeater")
-                        msgIntent.putExtra("log", "Sent Heartbeat")
+                        msgIntent.putExtra("log", "Sent Heartbeat " + startTime)
                         sendBroadcast(msgIntent)
                     }
                 }
-
-
         }
         else
             Log.e("MqttBackgroundService", "MQTT Not Connected - did not send")
 
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-        alarmManager?.setExact(AlarmManager.RTC_WAKEUP, Date().time + (15 * 1000),"NA", object : AlarmManager.OnAlarmListener {
-            override fun onAlarm() {
-                sendMQTTHeartBeat()
-            }}, null);
-
+        scheduleNext()
     }
 
-    override fun stopService(name: Intent?): Boolean {
-        timer.cancel()
-        return super.stopService(name)
+    override fun onDestroy() {
+        Log.d("MqttBackgroundService", "Service Stopped" + startTime + " Create: " + createTime)
+        if(hasStarted) {
+            if (pendingIntent != null) {
+                // Cancel Alarm.
+                val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                unregisterReceiver(alarmReceiver)
+            }
+
+            hasStarted = false
+        }
+
+        return super.onDestroy()
     }
+
 
     override fun onBind(intent: Intent?): IBinder? {
         Log.d("MqttBackgroundService", "On Bind was Called.")
@@ -272,7 +279,6 @@ class MqttBackgroundService() : Service() {
         }
 
         startForeground(1, notificationBuilder.build())
-
     }
 
     private fun subscribe() {

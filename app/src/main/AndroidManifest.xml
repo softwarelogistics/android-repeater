@@ -45,6 +45,7 @@
         <service android:name="MqttBackgroundService"
             android:foregroundServiceType="remoteMessaging"
             android:exported="false"/>
+
     </application>
     <!--on below line we are adding sms permissions-->
 

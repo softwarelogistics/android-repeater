@@ -31,6 +31,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.Date
 
 
 private val Context.dataStore by preferencesDataStore(name = "settingsStorage")
@@ -50,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     var deviceId: String = ""
     var phoneNumber: String = ""
 
+    var startTime = Date()
 
     val DEVICE_ID = stringPreferencesKey("deviceid")
     var PHONE_NUMBER_ID = stringPreferencesKey("phonenumber")
@@ -86,7 +88,7 @@ class MainActivity : AppCompatActivity() {
                 if(intent.hasExtra("log")) {
                     lstAdapter.addLogRecord(intent.extras!!.getString("log")!!)
                     lstAdapter.notifyDataSetChanged()
-                    Log.d("Notification Received", intent.extras!!.getString("log")!!)
+                    Log.d("Notification Received", intent.extras!!.getString("log")!! + " " + startTime)
                 }
 
                 if(intent.hasExtra("sms")) {
