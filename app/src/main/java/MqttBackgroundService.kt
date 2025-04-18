@@ -70,6 +70,13 @@ class MqttBackgroundService() : Service() {
         this.registerReceiver(alarmReceiver, filter, RECEIVER_NOT_EXPORTED)
     }
 
+    public  fun isConnected() : Boolean  {
+        if(!this::client.isInitialized)
+            return false;
+
+        return client.state == MqttClientState.CONNECTED;
+    }
+
     override fun onCreate() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
@@ -140,9 +147,6 @@ class MqttBackgroundService() : Service() {
                 .send()
         }
     }
-
-
-
     inner class LocalBinder : Binder() {
         // Return this instance of LocalService so clients can call public methods.
         fun getService(): MqttBackgroundService = this@MqttBackgroundService
@@ -152,73 +156,73 @@ class MqttBackgroundService() : Service() {
     fun sendMQTTHeartBeat() {
         Log.d("MqttBackgroundService", "Hearbeat - Start:" + startTime + " Create: " + createTime)
 
-        if(!this::client.isInitialized)
-            return
+        if(this::client.isInitialized) {
+            val telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
 
-        /*val wakeLock: PowerManager.WakeLock =
-        (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag").apply {
-                acquire()
+            val currentPhone = telephonyManager.line1Number
+            val cellLocationList = telephonyManager.allCellInfo
+            val networkOperator = telephonyManager.networkOperator
+
+            val mcc = if (networkOperator.length > 6) networkOperator.substring(3, 0) else ""
+            val mnc = if (networkOperator.length > 6) networkOperator.substring(3) else ""
+
+            val bm = baseContext.getSystemService(BATTERY_SERVICE) as BatteryManager
+            val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            var charging = bm.getIntProperty(BatteryManager.BATTERY_STATUS_CHARGING)
+
+            val topic = "nuviot/srvr/dvcsrvc/$deviceId/heartbeat"
+            var payload = "phone=$currentPhone,mcc=${mcc},mnc=${mnc},"
+
+            if (lastLocation != null)
+                payload += "lat=${lastLocation!!.latitude},lon=${lastLocation!!.longitude},"
+
+            if (sendingPhoneNumber != null && sendingPhoneNumber.length > 0)
+                payload += "phone=${sendingPhoneNumber},"
+
+            if (client.state != MqttClientState.CONNECTED) {
+                Log.e("MqttBackgroundService", "MQTT Not Connected - Reconnecting")
+                connectToMQTT()
+
+                val intent = Intent()
+                intent.setPackage(baseContext.packageName)
+                intent.setAction("com.softwarelogistics.911repeater")
+                intent.putExtra("connected", false)
+                intent.putExtra("log", "disconnected")
+                sendBroadcast(intent)
             }
-        }*/
 
-        //if (ActivityCompat.checkSelfPermission( this, Manifest.permission.ACCESS_FINE_LOCATION ) == PackageManager.PERMISSION_GRANTED) {
-        val telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+            if (client.state == MqttClientState.CONNECTED) {
+                Log.d(
+                    "MqttBackgroundService",
+                    "Connected - send heartbeat - Start:" + startTime + " Create: " + createTime
+                )
+                client.publishWith()
+                    .topic(topic)
+                    .payload(payload.toByteArray())
+                    .send()
+                    .whenComplete { publish: Mqtt3Publish?, throwable: Throwable? ->
+                        if (throwable != null) {
+                            Log.d("could not publish", "success")
+                            // handle failure to publish
+                        } else {
 
-        val currentPhone = telephonyManager.line1Number
-        val cellLocationList = telephonyManager.allCellInfo
-        val networkOperator = telephonyManager.networkOperator
-
-        val mcc = if(networkOperator.length > 6)  networkOperator.substring(3, 0) else ""
-        val mnc = if( networkOperator.length > 6)  networkOperator.substring(3) else ""
-
-        val bm = baseContext.getSystemService(BATTERY_SERVICE) as BatteryManager
-        val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        var charging = bm.getIntProperty(BatteryManager.BATTERY_STATUS_CHARGING)
-
-        val topic  =   "nuviot/srvr/dvcsrvc/$deviceId/heartbeat"
-        var payload = "phone=$currentPhone,mcc=${mcc},mnc=${mnc},"
-
-        if(lastLocation != null)
-            payload += "lat=${lastLocation!!.latitude},lon=${lastLocation!!.longitude},"
-
-        if(sendingPhoneNumber != null && sendingPhoneNumber.length > 0)
-            payload += "phone=${sendingPhoneNumber},"
-
-        if(client.state != MqttClientState.CONNECTED) {
-            Log.e("MqttBackgroundService", "MQTT Not Connected - Reconnecting")
-            connectToMQTT()
-
-            val intent = Intent()
-            intent.setPackage(baseContext.packageName)
-            intent.setAction("com.softwarelogistics.911repeater")
-            intent.putExtra("connected", false)
-            intent.putExtra("log", "disconnected")
-            sendBroadcast(intent)
-        }
-
-        if(client.state == MqttClientState.CONNECTED){
-            Log.d("MqttBackgroundService", "Connected - send heartbeat - Start:" + startTime + " Create: " + createTime)
-            client.publishWith()
-                .topic(topic)
-                .payload(payload.toByteArray())
-                .send()
-                .whenComplete { publish: Mqtt3Publish?, throwable: Throwable? ->
-                    if (throwable != null) {
-                        Log.d("could not publish", "success")
-                        // handle failure to publish
-                    } else {
-
-                        val msgIntent = Intent()
-                        msgIntent.setPackage(baseContext.packageName)
-                        msgIntent.setAction("com.softwarelogistics.911repeater")
-                        msgIntent.putExtra("log", "Sent Heartbeat " + startTime)
-                        sendBroadcast(msgIntent)
+                            val msgIntent = Intent()
+                            msgIntent.setPackage(baseContext.packageName)
+                            msgIntent.setAction("com.softwarelogistics.911repeater")
+                            msgIntent.putExtra("log", "Sent Heartbeat")
+                            sendBroadcast(msgIntent)
+                        }
                     }
-                }
+            } else
+                Log.e("MqttBackgroundService", "MQTT Not Connected - did not send")
         }
-        else
-            Log.e("MqttBackgroundService", "MQTT Not Connected - did not send")
+        else {
+            val msgIntent = Intent()
+            msgIntent.setPackage(baseContext.packageName)
+            msgIntent.setAction("com.softwarelogistics.911repeater")
+            msgIntent.putExtra("log", "Pending initialization")
+            sendBroadcast(msgIntent)
+        }
 
         scheduleNext()
     }
@@ -286,18 +290,33 @@ class MqttBackgroundService() : Service() {
             .topicFilter("nuviot/dvcsrvc/$deviceId/#")
             .callback { publish: Mqtt3Publish ->
                 val topic = publish.topic.toString()
-                val body = String(publish.payloadAsBytes,StandardCharsets.UTF_8)
                 val parts = topic.split('/')
                 var notification = parts[parts.size - 1]
-                val bodyParts = body.split('=')
-                var sms = bodyParts[1]
-                println("Received notification $notification for sms")
+
+                val body = String(publish.payloadAsBytes,StandardCharsets.UTF_8)
+                val bodySections = body.split(';')
+                var phone = ""
+                var sms = ""
+
+                bodySections.forEach({
+                    var sectionParts = it.split('=')
+                    if(sectionParts[0] == "phone")
+                        phone = sectionParts[1]
+                    else if(sectionParts[0] == "body")
+                        sms = sectionParts[1]
+                })
+
+                if(phone != "")
+                    Log.d("MqttBackgroundService", "Send to phone: $phone")
+
+                Log.d("MqttBackgroundService", "Message: $sms")
 
                 val intent = Intent()
                 intent.setPackage(baseContext.packageName)
                 intent.setAction("com.softwarelogistics.911repeater")
                 intent.putExtra("topic",notification)
                 intent.putExtra("sms", sms)
+                intent.putExtra("phone", phone)
                 intent.putExtra("index", index.toString())
                 sendBroadcast(intent)
 
@@ -350,7 +369,7 @@ class MqttBackgroundService() : Service() {
                     sendBroadcast(intent)
 
                     val topic = "nuviot/srvr/dvcsrvc/$deviceId/online"
-                    val payload = "firmwareSku=SA-RPTR-ANDRD-001,firmwareVersion=0.8.0"
+                    val payload = "firmwareSku=SA-RPTR-ANDRD-001,firmwareVersion=" + resources.getString( com.softwarelogistics.safetyalertclient.R.string.app_version)
 
                     Log.d("MqttBackgroundService", "Initial: " + topic + " - " + payload)
 

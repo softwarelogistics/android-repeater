@@ -10,22 +10,33 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
 import android.telephony.SmsManager
 import android.util.Log
 import android.view.Menu
+import android.view.MenuItem
+import android.view.View
+import android.view.animation.AlphaAnimation
+import android.view.animation.Animation
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.app.ActivityCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.transition.Visibility
 import com.softwarelogistics.safetyalertclient.com.softwarelogistics.safetyalertclient.LogListAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,12 +53,16 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var reciever: BroadcastReceiver
 
+    lateinit var onlineIndicator: ImageView
+    lateinit var offLineIndicator: ImageView
     lateinit var editMqttDeviceId: EditText
     lateinit var editPhoneNumber: EditText
     lateinit var btnSaveDeviceId: Button
-    lateinit var connectLabel: TextView
+    lateinit var btnCancel: Button
     lateinit var logList: ListView
+    lateinit var versionLabel: TextView
     lateinit var lstAdapter: LogListAdapter
+    lateinit var connectionSection: LinearLayout
     var deviceId: String = ""
     var phoneNumber: String = ""
 
@@ -62,11 +77,22 @@ class MainActivity : AppCompatActivity() {
         return super.onCreateOptionsMenu(menu)
     }
 
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.edit_connection -> {
+                // Handle the "Edit Connection" menu item click here
+                connectionSection.visibility = View.VISIBLE
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        lstAdapter = LogListAdapter(this, android.R.layout.simple_list_item_1)
+        lstAdapter = LogListAdapter(this,  R.layout.list_view_white_text)
 
         intent.setAction(ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
 
@@ -79,10 +105,12 @@ class MainActivity : AppCompatActivity() {
 
                 if(intent.hasExtra("connected")){
                     val isConnected = intent.extras!!.getBoolean("connected")
-                    if(isConnected)
-                        connectLabel.setText("Connected: true")
-                    else
-                        connectLabel.setText("Connected: false")
+                    if(isConnected) {
+                        startFlashing()
+                    }
+                    else{
+                        stopFlashing()
+                    }
                 }
 
                 if(intent.hasExtra("log")) {
@@ -92,14 +120,23 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if(intent.hasExtra("sms")) {
-                    if(phoneNumber.length > 0) {
+                    var sendPhoneNumber = if(intent.hasExtra("phone")) intent.extras!!.getString("phone")!! else phoneNumber
+
+                    Log.d("MAINACTIVITY_onCreate", "Using phone number: $sendPhoneNumber")
+
+                    sendPhoneNumber = sendPhoneNumber.replace(" ", "")
+                    sendPhoneNumber = sendPhoneNumber.replace("-", "")
+                    sendPhoneNumber = sendPhoneNumber.replace("(", "")
+                    sendPhoneNumber = sendPhoneNumber.replace(")", "")
+
+                    if(sendPhoneNumber.length > 0) {
                         val body = intent.extras!!.getString("sms")
                         val smsManager: SmsManager =   SmsManager.getDefault()
                         val piSent = PendingIntent.getBroadcast(context, 0, Intent("SMS_SENT"), FLAG_IMMUTABLE)
                         val piDelivered = PendingIntent.getBroadcast(context, 0, Intent("SMS_DELIVERED"), FLAG_IMMUTABLE)
-                        smsManager.sendTextMessage(phoneNumber, null, body, piSent, piDelivered)
-                        lstAdapter.addLogRecord("Sending Text to $phoneNumber - $index")
-                        mService.sendMQTTTopic("repeater/$deviceId/send/$phoneNumber")
+                        smsManager.sendTextMessage(sendPhoneNumber, null, body, piSent, piDelivered)
+                        lstAdapter.addLogRecord("Sending Text to $sendPhoneNumber")
+                        mService.sendMQTTTopic("repeater/$deviceId/send/$sendPhoneNumber.trim()")
                         lstAdapter.notifyDataSetChanged()
                     }
                     else {
@@ -110,14 +147,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        connectionSection = findViewById<LinearLayout>(R.id.connectionSection)
         editMqttDeviceId = findViewById<EditText>(R.id.editMqttDeviceId)
         editPhoneNumber = findViewById<EditText>(R.id.editPhoneNumber)
-        btnSaveDeviceId = findViewById<Button>(R.id.btnSaveDeviceId)
-        connectLabel = findViewById<TextView>(R.id.lblConnectionStatus)
+        btnSaveDeviceId = findViewById<Button>(R.id.btnSave)
+        btnCancel = findViewById<Button>(R.id.btnCancel)
+        versionLabel = findViewById<TextView>(R.id.lblVersion)
+        onlineIndicator = findViewById<ImageView>(R.id.online_indicator)
+        offLineIndicator = findViewById<ImageView>(R.id.offline_indicator)
+        versionLabel.text = resources.getString( R.string.app_version)
+
         logList = findViewById<ListView>(R.id.lstLog)
         logList.adapter = lstAdapter
 
         btnSaveDeviceId.setOnClickListener { CoroutineScope(Dispatchers.IO).launch{ saveDeviceId()} }
+        btnCancel.setOnClickListener { connectionSection.visibility = View.GONE }
+
         registerReceiver(reciever, filter, RECEIVER_NOT_EXPORTED)
         Log.d("MAINACTIVITY_onCreate", "Register Receiver")
 
@@ -147,6 +192,36 @@ class MainActivity : AppCompatActivity() {
         if(checkPermissions()) {
             startBackgroundService()
         }
+    }
+
+    private fun startFlashing() {
+        val unwrappedDrawable = AppCompatResources.getDrawable(this, R.drawable.online_indicator)
+        val wrappedDrawable = DrawableCompat.wrap(unwrappedDrawable!!)
+        DrawableCompat.setTint(wrappedDrawable, Color.GREEN)
+
+        val anim = AlphaAnimation(0.0f, 1.0f)
+        anim.duration = 1000 //You can manage the blinking time with this parameter
+        anim.startOffset = 20
+        anim.repeatMode = Animation.REVERSE
+        anim.repeatCount = Animation.INFINITE
+        onlineIndicator.startAnimation(anim)     //     button.startAnimation(anim)
+
+        offLineIndicator.visibility = View.GONE
+        onlineIndicator.visibility = View.VISIBLE
+        connectionSection.visibility = View.GONE
+        logList.visibility = View.GONE
+   }
+
+    private fun stopFlashing() {
+        val unwrappedDrawable = AppCompatResources.getDrawable(this, R.drawable.online_indicator)
+        val wrappedDrawable = DrawableCompat.wrap(unwrappedDrawable!!)
+        DrawableCompat.setTint(wrappedDrawable, Color.RED)
+
+        onlineIndicator.clearAnimation()
+        offLineIndicator.visibility = View.VISIBLE
+        onlineIndicator.visibility = View.GONE
+        connectionSection.visibility = View.VISIBLE
+        logList.visibility = View.VISIBLE
     }
 
     var smsSentReceiver: BroadcastReceiver? = null
@@ -287,6 +362,13 @@ class MainActivity : AppCompatActivity() {
 
                 editPhoneNumber.setText(phoneNumber)
                 editMqttDeviceId.setText(deviceId)
+
+                if(mService.isConnected()) {
+                    startFlashing()
+                }
+                else {
+                    stopFlashing()
+                }
             }
         }
 

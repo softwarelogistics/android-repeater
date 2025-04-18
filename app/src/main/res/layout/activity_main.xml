@@ -3,9 +3,16 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#2c2c2c"
     android:orientation="vertical"
+    android:layout_gravity="center"
     tools:context=".MainActivity">
-
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/greenlight_alerting_logo"
+        />
     <!--on below line we are displaying a simple text view-->
     <TextView
         android:id="@+id/textView"
@@ -16,66 +23,89 @@
         android:layout_marginTop="30dp"
         android:layout_marginEnd="10dp"
         android:padding="10dp"
-        android:text="Safety Alerting 911 Repeater"
+        android:text="911 Repeater"
         android:textAlignment="center"
+        android:textColor="#FFFFFF"
         android:textSize="20sp" />
 
-
     <TextView
+        android:id="@+id/lblVersion"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:layout_marginStart="10dp"
         android:layout_marginEnd="10dp"
         android:padding="10dp"
+        android:textColor="#FFFFFF"
         android:text="V1.0.0"
         android:textAlignment="center"
         android:textSize="20sp" />
 
-
-    <TextView
-        android:id="@+id/lblConnectionStatus"
+    <LinearLayout
+        android:orientation="vertical"
+        android:id="@+id/connectionSection"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:layout_marginStart="10dp"
-        android:layout_marginEnd="10dp"
-        android:padding="10dp"
-        android:text="Connected: False"
-        android:textAlignment="center"
-        android:textSize="20sp" />
+        android:layout_height="wrap_content">
 
     <EditText
         android:id="@+id/editMqttDeviceId"
         android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:textColor="#FFFFFF"
         android:layout_marginStart="10dp"
         android:layout_marginEnd="10dp"
-        android:hint = "-please add your device id-"
-        android:layout_height="40dp">
-    </EditText>
+        android:hint="-please add your device id-"></EditText>
+
     <EditText
         android:id="@+id/editPhoneNumber"
         android:layout_width="match_parent"
+        android:layout_height="40dp"
         android:layout_marginStart="10dp"
+        android:textColor="#FFFFFF"
         android:layout_marginEnd="10dp"
-        android:hint = "-please add destination phone number-"
-        android:layout_height="40dp">
-    </EditText>
-    <Button
-        android:id="@+id/btnSaveDeviceId"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="end"
-        android:text="Save">
-    </Button>
+        android:hint="-please add destination phone number-"></EditText>
 
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_gravity="end"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginEnd="10dp"
+            android:text="Save"></Button>
+        <Button
+            android:id="@+id/btnCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginEnd="10dp"
+            android:text="Cancel"></Button>
+    </LinearLayout>
 
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:id="@+id/offline_indicator"
+        android:src="@drawable/offline_indicator"
+        />
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:visibility="gone"
+        android:id="@+id/online_indicator"
+        android:src="@drawable/online_indicator"
+        />
 
     <ListView
         android:id="@+id/lstLog"
+        android:textColor="#FFFFFF"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        />
+        android:layout_height="match_parent" />
 
     <!--on below line we are creating a
         simple edit text for phone number-->
