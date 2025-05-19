@@ -9,24 +9,11 @@
     tools:context=".MainActivity">
     <ImageView
         android:layout_width="match_parent"
-        android:layout_height="200dp"
+        android:layout_height="180dp"
         android:scaleType="centerInside"
         android:src="@drawable/greenlight_alerting_logo"
         />
     <!--on below line we are displaying a simple text view-->
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:layout_marginStart="10dp"
-        android:layout_marginTop="30dp"
-        android:layout_marginEnd="10dp"
-        android:padding="10dp"
-        android:text="911 Repeater"
-        android:textAlignment="center"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp" />
 
     <TextView
         android:id="@+id/lblVersion"
@@ -69,7 +56,7 @@
             android:orientation="horizontal"
             android:layout_gravity="end"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content" >
         <Button
             android:id="@+id/btnSave"
             android:layout_width="wrap_content"
@@ -84,6 +71,7 @@
             android:layout_gravity="end"
             android:layout_marginEnd="10dp"
             android:text="Cancel"></Button>
+        </LinearLayout>
     </LinearLayout>
 
     <ImageView
@@ -100,6 +88,46 @@
         android:id="@+id/online_indicator"
         android:src="@drawable/online_indicator"
         />
+
+    <TextView
+        android:id="@+id/lblConnectionStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:padding="10dp"
+        android:textColor="#FFFFFF"
+        android:text="V1.0.0"
+        android:textAlignment="center"
+        android:textSize="20sp" />
+
+    <TextView
+        android:id="@+id/lblConnectionTimeStamp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:padding="10dp"
+        android:textColor="#FFFFFF"
+        android:text="V1.0.0"
+        android:textAlignment="center"
+        android:textSize="20sp" />
+
+    <TextView
+        android:id="@+id/lblLastHeartBeat"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:padding="10dp"
+        android:textColor="#FFFFFF"
+        android:text="V1.0.0"
+        android:textAlignment="center"
+        android:textSize="20sp" />
+
 
     <ListView
         android:id="@+id/lstLog"

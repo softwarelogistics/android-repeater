@@ -37,11 +37,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.transition.Visibility
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException
 import com.softwarelogistics.safetyalertclient.com.softwarelogistics.safetyalertclient.LogListAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import java.text.SimpleDateFormat
 import java.util.Date
 
 
@@ -61,10 +64,15 @@ class MainActivity : AppCompatActivity() {
     lateinit var btnCancel: Button
     lateinit var logList: ListView
     lateinit var versionLabel: TextView
+    lateinit var connectionStatus: TextView
+    lateinit var connectionTimeStamp: TextView
+    lateinit var lastHeartBeat: TextView
     lateinit var lstAdapter: LogListAdapter
     lateinit var connectionSection: LinearLayout
     var deviceId: String = ""
     var phoneNumber: String = ""
+
+    val simpleDateFormat = SimpleDateFormat("MM/dd - HH:mm:ss")
 
     var startTime = Date()
 
@@ -107,16 +115,40 @@ class MainActivity : AppCompatActivity() {
                     val isConnected = intent.extras!!.getBoolean("connected")
                     if(isConnected) {
                         startFlashing()
+                        connectionTimeStamp.visibility = View.VISIBLE
+                        lastHeartBeat.visibility = View.VISIBLE
+
+                        connectionStatus.text = "Connected"
+                        connectionTimeStamp.text = "Connection as of: " + simpleDateFormat.format(Date())
                     }
                     else{
                         stopFlashing()
+
+                        connectionTimeStamp.visibility = View.GONE
+                        lastHeartBeat.visibility = View.GONE
+
+                        connectionStatus.text = "Disconnected"
+                        connectionTimeStamp.text = "-"
                     }
                 }
 
                 if(intent.hasExtra("log")) {
+                    lastHeartBeat.text = "Last Activity: " + simpleDateFormat.format(Date())
                     lstAdapter.addLogRecord(intent.extras!!.getString("log")!!)
                     lstAdapter.notifyDataSetChanged()
                     Log.d("Notification Received", intent.extras!!.getString("log")!! + " " + startTime)
+                }
+
+                if(intent.hasExtra("newfwdnumber")) {
+                    phoneNumber = intent.extras!!.getString("newfwdnumber")!!
+                    editPhoneNumber.setText(phoneNumber)
+                    runBlocking {
+                        dataStore.edit { preferences ->
+                            preferences[DEVICE_ID] = deviceId; preferences[PHONE_NUMBER_ID] =
+                            phoneNumber
+                        }
+                        dataStore.apply { }
+                    }
                 }
 
                 if(intent.hasExtra("sms")) {
@@ -155,7 +187,10 @@ class MainActivity : AppCompatActivity() {
         versionLabel = findViewById<TextView>(R.id.lblVersion)
         onlineIndicator = findViewById<ImageView>(R.id.online_indicator)
         offLineIndicator = findViewById<ImageView>(R.id.offline_indicator)
-        versionLabel.text = resources.getString( R.string.app_version)
+        lastHeartBeat = findViewById<TextView>(R.id.lblLastHeartBeat)
+        connectionStatus = findViewById<TextView>(R.id.lblConnectionStatus)
+        connectionTimeStamp = findViewById<TextView>(R.id.lblConnectionTimeStamp)
+        versionLabel.text =  "911 Repeater - " +resources.getString( R.string.app_version)
 
         logList = findViewById<ListView>(R.id.lstLog)
         logList.adapter = lstAdapter

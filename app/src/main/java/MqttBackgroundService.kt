@@ -291,36 +291,59 @@ class MqttBackgroundService() : Service() {
             .callback { publish: Mqtt3Publish ->
                 val topic = publish.topic.toString()
                 val parts = topic.split('/')
-                var notification = parts[parts.size - 1]
-
                 val body = String(publish.payloadAsBytes,StandardCharsets.UTF_8)
                 val bodySections = body.split(';')
-                var phone = ""
-                var sms = ""
+                Log.d("MqttBackgroundService", "Topic: $topic Message: $body")
+                when(parts[3])
+                {
+                    "command" -> {
+                        var notification = parts[parts.size - 1]
 
-                bodySections.forEach({
-                    var sectionParts = it.split('=')
-                    if(sectionParts[0] == "phone")
-                        phone = sectionParts[1]
-                    else if(sectionParts[0] == "body")
-                        sms = sectionParts[1]
-                })
+                        var phone = ""
+                        var sms = ""
 
-                if(phone != "")
-                    Log.d("MqttBackgroundService", "Send to phone: $phone")
+                        Log.d("MqttBackgroundService", "Topic: $topic Message: $body")
 
-                Log.d("MqttBackgroundService", "Message: $sms")
+                        bodySections.forEach({
+                            var sectionParts = it.split('=')
+                            if(sectionParts[0] == "phone")
+                                phone = sectionParts[1]
+                            else if(sectionParts[0] == "body")
+                                sms = sectionParts[1]
+                        })
 
-                val intent = Intent()
-                intent.setPackage(baseContext.packageName)
-                intent.setAction("com.softwarelogistics.911repeater")
-                intent.putExtra("topic",notification)
-                intent.putExtra("sms", sms)
-                intent.putExtra("phone", phone)
-                intent.putExtra("index", index.toString())
-                sendBroadcast(intent)
+                        if(phone != "")
+                            Log.d("MqttBackgroundService", "Send to phone: $phone")
 
-                index++
+                        Log.d("MqttBackgroundService", "Message: $sms")
+
+                        val intent = Intent()
+                        intent.setPackage(baseContext.packageName)
+                        intent.setAction("com.softwarelogistics.911repeater")
+                        intent.putExtra("topic",notification)
+                        intent.putExtra("sms", sms)
+                        intent.putExtra("phone", phone)
+                        intent.putExtra("index", index.toString())
+                        sendBroadcast(intent)
+
+                        index++
+                    }
+                    "setproperty" -> {
+                        var propertyName = parts[4]
+                        Log.d("MqttBackgroundService", "Set Property Name: $propertyName")
+                        if(parts[4] == "fwdnumber") {
+                            var newPhoneNumber = body.split('=')[1]
+                            sendingPhoneNumber = newPhoneNumber
+                            Log.d("MqttBackgroundService", "New Phone Number: $newPhoneNumber")
+                            val intent = Intent()
+                            intent.setAction("com.softwarelogistics.911repeater")
+                            intent.putExtra("toopic", "newfwdnumber")
+                            intent.putExtra("newfwdnumber",sendingPhoneNumber)
+                            intent.putExtra("index", index.toString())
+                            sendBroadcast(intent)
+                        }
+                    }
+                }
             }
             .send()
             .whenComplete { publish: Mqtt3SubAck?, throwable: Throwable? ->

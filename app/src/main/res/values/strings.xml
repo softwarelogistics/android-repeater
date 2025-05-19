@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">GreenLight Alerting</string>
     <string name="title_home">Home</string>
-    <string name="app_version">V1.5.0</string>
+    <string name="app_version">V1.7.0</string>
     <string name="title_dashboard">Dashboard</string>
     <string name="title_notifications">Notifications</string>
     <string name="safety_alerting_repeater">GreenLight Alerting - 911 Repeater</string>
